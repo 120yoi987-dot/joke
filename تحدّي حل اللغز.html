@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تحدّي حل اللغز</title>
+<style>
+:root{--bg:#14110f;--fg:#f4ead9;--card:#241e19;--line:#6e4a1e;--accent:#ff7a4d;--muted:#b9a88f;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#2a2320;--fg:#f4ead9;--card:#352c26;--line:#8a6a3a;--accent:#ff7a4d;--muted:#cdbda3}}
+:root[data-theme="light"]{--bg:#2a2320;--card:#352c26}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 30%,#3a2f28,var(--bg) 70%);color:var(--fg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;padding:18px 14px;overflow-x:hidden;transition:background 1.2s}
+body.cine{background:radial-gradient(ellipse at 50% 35%,#2b1f18,#000 75%)}
+h1{margin:0;font-size:clamp(26px,6vw,40px);color:var(--accent);text-align:center}
+.sub{color:var(--muted);margin:4px 0 6px;text-align:center}
+#stage{position:relative;width:min(560px,100%);height:min(52vh,460px)}
+canvas{width:100%;height:100%;display:block}
+.card{background:var(--card);border-radius:18px;padding:16px;width:min(460px,100%);box-shadow:0 6px 24px rgba(0,0,0,.4);text-align:center}
+.q{font-size:20px;font-weight:700;margin:0 0 10px}
+input{width:100%;font:inherit;font-size:18px;padding:12px;border-radius:12px;border:2px solid var(--line);background:#00000040;color:var(--fg);text-align:center}
+.row{display:flex;gap:8px;margin-top:10px;justify-content:center;flex-wrap:wrap}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:11px 18px;cursor:pointer;background:var(--accent);color:#fff}
+button.alt{background:transparent;color:var(--fg);border:2px solid var(--line)}
+#msg{min-height:28px;margin-top:10px;font-weight:700}
+.credit{margin-top:18px;font-weight:800;font-size:18px;letter-spacing:.5px;color:#ffd166;text-shadow:0 2px 10px rgba(255,122,77,.55);text-align:center;padding-bottom:12px}
+.shake{animation:sh .4s}
+@keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.bar{position:fixed;left:0;right:0;height:0;background:#000;z-index:8;transition:height 1.2s ease;pointer-events:none}
+.bar.t{top:0}.bar.b2{bottom:0}
+.cine .bar{height:9vh}
+.vig{position:fixed;inset:0;pointer-events:none;z-index:7;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.75));opacity:0;transition:opacity 1.2s}
+.cine .vig{opacity:1}
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
+.flash.go{animation:fl .7s ease-out}
+@keyframes fl{0%{opacity:.85}100%{opacity:0}}
+.fx{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:10}
+.bl{position:absolute;bottom:-120px;width:46px;height:58px;border-radius:50% 50% 48% 48%;animation:up linear forwards}
+.bl::after{content:"";position:absolute;bottom:-14px;left:50%;width:2px;height:16px;background:currentColor;opacity:.5}
+@keyframes up{to{transform:translateY(-120vh) rotate(12deg)}}
+.c{position:absolute;top:-20px;width:9px;height:14px;animation:fa linear forwards}
+@keyframes fa{to{transform:translateY(110vh) rotate(720deg)}}
+.win{position:fixed;top:14%;left:0;right:0;text-align:center;font-size:clamp(40px,12vw,90px);font-weight:900;color:#ffd166;text-shadow:0 4px 18px rgba(255,122,77,.7);z-index:11;pointer-events:none;animation:pop .7s both}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+</style>
+</head>
+<body>
+<h1>تحدّي حل اللغز</h1>
+<p class="sub">حلّ اللغز وشوف شو بصير باليد 👀</p>
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="card">
+  <p class="q" id="q"></p>
+  <input id="ans" placeholder="اكتب جوابك هون" autocomplete="off">
+  <div class="row"><button id="go">تحقّق</button><button class="alt" id="hint">تلميح</button><button class="alt" id="next">لغز ثاني</button></div>
+  <div id="msg"></div>
+</div>
+<div class="credit">✦ تصميم وعمل المهندس حسن ✦</div>
+<div class="bar t"></div><div class="bar b2"></div><div class="vig"></div><div class="flash" id="fl"></div><div class="fx" id="fx"></div>
+
+<script>
+const $=id=>document.getElementById(id),cv=$("c"),stage=$("stage");
+const VS="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+const FS=`precision highp float;
+uniform vec2 uR;uniform vec3 uM,uCam,uTgt;uniform float uFov,uRy,uYo,uK;
+float smin(float a,float b,float k){float h=max(k-abs(a-b),0.)/k;return min(a,b)-h*h*k*.25;}
+vec3 rxi(vec3 q,float a){float c=cos(a),s=sin(a);return vec3(q.x,c*q.y+s*q.z,-s*q.y+c*q.z);}
+float cap(vec3 p,float L,float r1,float r2){float h=clamp(p.y/L,0.,1.);return length(p-vec3(0.,L*h,0.))-mix(r1,r2,h);}
+float ell(vec3 p,vec3 r){float k0=length(p/r),k1=max(length(p/(r*r)),1e-4);return k0*(k0-1.)/k1;}
+float fin(vec3 p,float x,float f,float r,vec3 a,out float nail){
+ vec3 q=p-vec3(x,.95,0.);
+ float d=ell(q-vec3(0.,0.,.04),vec3(r*1.12,r,r));
+ float L1=.8*f,L2=.55*f,L3=.45*f;
+ vec3 q1=rxi(q,a.x);d=smin(d,cap(q1,L1,r,r*.93),.07);
+ vec3 q2=rxi(q1-vec3(0.,L1,0.),a.y);d=smin(d,cap(q2,L2,r*.93,r*.86),.05);
+ vec3 q3=rxi(q2-vec3(0.,L2,0.),a.z);d=smin(d,cap(q3,L3,r*.86,r*.78),.05);
+ nail=ell(q3-vec3(0.,L3*.62,r*.76),vec3(r*.6,L3*.34,r*.12));
+ return d;}
+vec3 hp(vec3 w){vec3 p=w-vec3(0.,uYo,0.);float c=cos(uRy),s=sin(uRy);return vec3(c*p.x-s*p.z,p.y,s*p.x+c*p.z);}
+vec2 map(vec3 w){
+ vec3 p=hp(w);
+ float d=ell(p-vec3(0.,.05,0.),vec3(1.2,1.08,.6));
+ d=smin(d,ell(p-vec3(-.8,-.55,-.05),vec3(.54,.66,.45)),.25);
+ d=smin(d,ell(p-vec3(.85,-.5,-.05),vec3(.4,.5,.4)),.25);
+ vec3 wq=p-vec3(0.,-2.3,0.);wq.z*=1.25;d=smin(d,cap(wq,1.9,.64,.6),.3);
+ float n1,nn=1e5;
+ d=smin(d,fin(p,-.84,1.,.25,vec3(-1.5,-1.75,-1.2),n1),.1);nn=min(nn,n1);
+ d=smin(d,fin(p,-.28,1.12,.27,uM,n1),.1);nn=min(nn,n1);
+ d=smin(d,fin(p,.28,1.,.25,vec3(-1.56,-1.75,-1.1),n1),.1);nn=min(nn,n1);
+ d=smin(d,fin(p,.82,.8,.22,vec3(-1.6,-1.75,-1.05),n1),.1);nn=min(nn,n1);
+ vec3 t=rxi(p-vec3(-1.1,-.35,-.05),-.9);float cz=cos(.75),sz=sin(.75);t=vec3(cz*t.x+sz*t.y,-sz*t.x+cz*t.y,t.z);
+ float dt=cap(t,.7,.3,.26);vec3 t2=rxi(t-vec3(0.,.7,0.),-.9);dt=smin(dt,cap(t2,.55,.26,.21),.06);
+ d=smin(d,dt,.12);
+ vec3 sq=p-vec3(0.,-3.3,0.);
+ float ds=max(length(sq.xz)-mix(1.2,.98,clamp(sq.y/1.5,0.,1.)),abs(sq.y-.75)-.75);
+ vec2 r=vec2(d,1.);if(nn<r.x)r=vec2(nn,2.);if(ds<r.x)r=vec2(ds,3.);
+ return r;}
+vec3 nrm(vec3 p){vec2 e=vec2(.002,-.002);return normalize(e.xyy*map(p+e.xyy).x+e.yyx*map(p+e.yyx).x+e.yxy*map(p+e.yxy).x+e.xxx*map(p+e.xxx).x);}
+float sh(vec3 ro,vec3 rd){float r=1.,t=.06;for(int i=0;i<28;i++){float h=map(ro+rd*t).x;r=min(r,9.*h/t);t+=clamp(h,.04,.4);if(r<.001||t>9.)break;}return clamp(r,0.,1.);}
+float ao(vec3 p,vec3 n){float o=0.,s=1.;for(int i=1;i<=4;i++){float h=.07*float(i);o+=(h-map(p+n*h).x)*s;s*=.7;}return clamp(1.-1.5*o,0.,1.);}
+void main(){
+ vec2 uv=(gl_FragCoord.xy-.5*uR)/uR.y;
+ vec3 ww=normalize(uTgt-uCam),uu=normalize(cross(ww,vec3(0.,1.,0.))),vv=cross(uu,ww);
+ vec3 ro=uCam,rd=normalize(uv.x*uu+uv.y*vv+(.5/tan(uFov*.5))*ww);
+ vec3 LP=vec3(-3.5,4.5,7.);
+ float t=max(length(ro)-6.,0.),tm=length(ro)+6.;bool hit=false;vec2 h=vec2(0.);
+ for(int i=0;i<90;i++){h=map(ro+rd*t);if(h.x<.002){hit=true;break;}t+=h.x*.9;if(t>tm)break;}
+ if(!hit){
+  float tp=(-2.2-ro.z)/rd.z;
+  if(rd.z<0.&&tp>0.){vec3 pp=ro+rd*tp;float s=sh(pp,normalize(LP-pp));gl_FragColor=vec4(0.,0.,0.,(1.-s)*.55);}else gl_FragColor=vec4(0.);
+  return;}
+ vec3 p=ro+rd*t,n=nrm(p),v=-rd,l=normalize(LP-p);
+ vec3 q=hp(p)*55.;float nz=fract(sin(dot(floor(q),vec3(12.9,78.2,37.7)))*43758.5);
+ float nz2=fract(sin(dot(floor(q*.3),vec3(39.3,11.1,57.7)))*24634.6);
+ vec3 alb=vec3(.80,.55,.43)*(.93+.1*nz)*(.95+.08*nz2);
+ float sp=.16,pw=26.;
+ if(h.y>2.5){alb=vec3(.11,.14,.21);sp=.02;pw=8.;}
+ else if(h.y>1.5){alb=vec3(.93,.74,.68);sp=.6;pw=90.;}
+ else{vec3 hq=hp(p);alb=mix(alb,vec3(.86,.45,.36),smoothstep(.0,2.2,hq.y)*.25*step(.5,hq.y));}
+ float sd=sh(p+n*.02,l),oc=ao(p,n),dif=max(dot(n,l),0.),wrap=clamp((dot(n,l)+.45)/1.45,0.,1.);
+ vec3 sss=vec3(.85,.22,.1)*(wrap-dif)*.9;
+ float nv=max(dot(n,v),0.);
+ vec3 col=alb*(vec3(1.,.94,.86)*uK*dif*sd+sss*uK*(.4+.6*sd)+vec3(.30,.32,.42)*(.55+.45*n.y)*oc*.75);
+ col+=vec3(1.,.95,.9)*sp*pow(max(dot(n,normalize(l+v)),0.),pw)*uK*sd;
+ col+=pow(1.-nv,3.)*vec3(.3,.45,.85)*.55*oc;
+ col=(col*(2.51*col+.03))/(col*(2.43*col+.59)+.14);
+ gl_FragColor=vec4(pow(clamp(col,0.,1.),vec3(.4545)),1.);}`;
+const gl=cv.getContext("webgl",{alpha:true,premultipliedAlpha:true});let ok=!!gl,U={};
+function mk(ty,src){const s=gl.createShader(ty);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(s);return s}
+if(ok){try{
+  const pr=gl.createProgram();gl.attachShader(pr,mk(gl.VERTEX_SHADER,VS));gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);gl.useProgram(pr);
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const al=gl.getAttribLocation(pr,"a");gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+  ["uR","uM","uCam","uTgt","uFov","uRy","uYo","uK"].forEach(n=>U[n]=gl.getUniformLocation(pr,n));
+ }catch(e){ok=false;console.error(e)}}
+if(!ok)stage.innerHTML="<p style='text-align:center'>المتصفح ما بدعم الـ3D</p>";
+function size(){if(!ok)return;const d=Math.min(devicePixelRatio||1,1.5);cv.width=stage.clientWidth*d;cv.height=stage.clientHeight*d;gl.viewport(0,0,cv.width,cv.height)}
+addEventListener("resize",size);size();
+const base=[-1.5,-1.75,-1.2],tuck=.18,MID=base.slice();
+function pose(J,a){a.forEach((v,i)=>J[i]=v)}
+const c0={p:[.8,2,9],t:[0,.9,0],fov:32},c1={p:[.3,2.3,6.4],t:[0,1.7,0],fov:30};
+let winT=null;
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)),sm=x=>x*x*(3-2*x),eb=x=>{const c=1.2,d=c+1;return 1+d*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const lv=(a,b,k)=>a.map((v,i)=>v+(b[i]-v)*k);
+function loop(now){
+  requestAnimationFrame(loop);if(!ok)return;
+  const idle=Math.sin(now/900)*.02,T=winT===null?-1:(now-winT)/1000,k=winT===null?0:sm(cl(T/3.6));
+  if(T>=0)for(let i=0;i<3;i++){
+    MID[i]=T<.5?base[i]-tuck*Math.sin(cl(T/.5)*Math.PI/2):(base[i]-tuck)*(1-eb(cl((T-.5-i*.13)/1.1)));
+  }
+  const sh=(T>1.3&&T<2)?Math.exp(-(T-1.3)*7)*Math.sin(T*70)*.05:0;
+  const p=lv(c0.p,c1.p,k);
+  gl.uniform2f(U.uR,cv.width,cv.height);gl.uniform3fv(U.uM,MID);
+  gl.uniform3f(U.uCam,p[0]+sh,p[1]+sh,p[2]);gl.uniform3fv(U.uTgt,lv(c0.t,c1.t,k));
+  gl.uniform1f(U.uFov,(c0.fov+(c1.fov-c0.fov)*k)*Math.PI/180);
+  gl.uniform1f(U.uRy,.6-k*.5+idle);gl.uniform1f(U.uYo,-.4+idle);gl.uniform1f(U.uK,1.5+k*1.2);
+  gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,3);
+}
+requestAnimationFrame(loop);
+// sound
+function boom(){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.type="sawtooth";o.frequency.setValueAtTime(140,a.currentTime+1.3);o.frequency.exponentialRampToValueAtTime(35,a.currentTime+2.1);g.gain.setValueAtTime(.0001,a.currentTime);g.gain.setValueAtTime(.5,a.currentTime+1.3);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+2.1);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+2.2)}catch(e){}}
+// riddles
+const R=[
+ {q:"شو الشي اللي كل ما أخذت منه كبر؟",a:["حفرة"],h:"بتلاقيه بالأرض"},
+ {q:"شو الشي اللي بمشي بلا رجلين وبكي بلا عيون؟",a:["غيمة","سحابة"],h:"بتشوفه بالسما"},
+ {q:"شو الشي اللي إله أسنان وما بعض؟",a:["مشط"],h:"بتستخدمه للشعر"},
+ {q:"شو الشي اللي بكتب وما بقرا؟",a:["قلم"],h:"بتمسكه بإيدك"}
+];
+const norm=s=>s.replace(/[\u064B-\u0652\u0640]/g,"").replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه").trim().replace(/^ال/,"").replace(/\s+/g,"");
+let i=0,done=false,timers=[];
+function load(){done=false;winT=null;timers.forEach(clearTimeout);timers=[];pose(MID,base);document.body.classList.remove("cine");$("q").textContent=R[i].q;$("ans").value="";$("msg").textContent="";$("fx").innerHTML="";document.querySelectorAll(".win").forEach(e=>e.remove())}
+function win(){
+  done=true;$("msg").textContent="🎬 جواب صح!";document.body.classList.add("cine");winT=performance.now();boom();
+  const at=(ms,f)=>timers.push(setTimeout(f,ms));
+  at(1300,()=>{const f=$("fl");f.classList.remove("go");void f.offsetWidth;f.classList.add("go")});
+  at(1900,()=>{
+    const fx=$("fx"),cols=["#e4572e","#f2b705","#2ea3f2","#3bb273","#a95cf0","#ff6fb5"];
+    for(let k=0;k<26;k++){const b=document.createElement("div");b.className="bl";const c=cols[k%6];b.style.cssText=`left:${Math.random()*95}%;background:${c};color:${c};animation-duration:${4+Math.random()*3}s;animation-delay:${Math.random()*1.5}s`;fx.appendChild(b)}
+    for(let k=0;k<90;k++){const c=document.createElement("div");c.className="c";c.style.cssText=`left:${Math.random()*100}%;background:${cols[k%6]};animation-duration:${2.5+Math.random()*2.5}s;animation-delay:${Math.random()*1.2}s`;fx.appendChild(c)}
+    const w=document.createElement("div");w.className="win";w.textContent="🎉 مبروك! 🎈";document.body.appendChild(w);
+  });
+}
+function check(){
+  if(done)return;const v=norm($("ans").value);if(!v)return;
+  if(R[i].a.some(x=>norm(x)===v))win();
+  else{$("msg").textContent="❌ غلط، جرّب مرة ثانية";const c=document.querySelector(".card");c.classList.remove("shake");void c.offsetWidth;c.classList.add("shake")}
+}
+$("go").onclick=check;
+$("ans").addEventListener("keydown",e=>{if(e.key==="Enter")check()});
+$("hint").onclick=()=>{$("msg").textContent="💡 "+R[i].h};
+$("next").onclick=()=>{i=(i+1)%R.length;load()};
+load();
+</script>
+</body>
+</html>
